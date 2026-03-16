@@ -1,0 +1,16 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Models and large files
+models/*.onnx
+models/*.zip
+models/buffalo_l/
+models/trt_cache/
+*.engine
+*.trt
+*.bin
+
+# Other potential data
+data/
