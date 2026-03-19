@@ -40,4 +40,3 @@ I have implemented the new vision pipeline per the requested `design.md`.
 On the Jetson, simply start the run using the new arguments pointing to the Pi's IP:
 ```bash
 python visual_jetson_async.py --no-display --ws-enabled --ws-uri ws://192.168.1.100:8765
-```

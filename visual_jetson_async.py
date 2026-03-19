@@ -108,6 +108,8 @@ def _parse_args() -> argparse.Namespace:
                    help="Resize width of streamed frame (smaller = less bandwidth)")
     p.add_argument("--stream-height", type=int, default=240,
                    help="Resize height of streamed frame")
+    p.add_argument("--cpu-only", action="store_true",
+                   help="Force CPU-only inference — skips TensorRT/CUDA compilation (faster startup, slower inference)")
     p.add_argument("--ws-enabled", action="store_true",
                    help="Enable async WebSocket streaming for vision triggers")
     p.add_argument("--ws-uri", default="ws://127.0.0.1:8765", metavar="URI",
@@ -139,13 +141,14 @@ class JetsonVisionPipeline:
 
         # ── Detector ─────────────────────────────────────────────────────────
         logger.info("  Loading face detector (SCRFD)…")
+        _use_gpu = not getattr(args, "cpu_only", False)
         self.detector = create_scrfd_detector(
             model_path=args.det_model,
             confidence_threshold=0.5,
             nms_threshold=0.4,
             input_size=(640, 640),
-            device="cuda",
-            use_tensorrt=True,
+            device="cuda" if _use_gpu else "cpu",
+            use_tensorrt=_use_gpu,
         )
 
         # ── Tracker ──────────────────────────────────────────────────────────
@@ -177,8 +180,8 @@ class JetsonVisionPipeline:
         try:
             self.recognizer = FaceRecognizer(
                 model_path=args.rec_model,
-                device="cuda",
-                use_tensorrt=True,
+                device="cuda" if _use_gpu else "cpu",
+                use_tensorrt=_use_gpu,
             )
             self.recognizer_available = True
         except Exception as exc:
@@ -423,8 +426,15 @@ class JetsonVisionPipeline:
                 except Exception:
                     tracker = cv2.TrackerMIL_create()
                 x1, y1, x2, y2 = det["bbox"]
-                w, h = max(1, int(x2 - x1)), max(1, int(y2 - y1))
-                tracker.init(frame, (int(x1), int(y1), w, h))
+                fh, fw = frame.shape[:2]
+                x1c = max(0, min(int(x1), fw - 1))
+                y1c = max(0, min(int(y1), fh - 1))
+                x2c = max(0, min(int(x2), fw))
+                y2c = max(0, min(int(y2), fh))
+                w, h = max(1, x2c - x1c), max(1, y2c - y1c)
+                if x1c + w > fw or y1c + h > fh:
+                    continue
+                tracker.init(frame, (x1c, y1c, w, h))
                 self.cv_trackers.append({
                     "tracker": tracker,
                     "confidence": det["confidence"],
