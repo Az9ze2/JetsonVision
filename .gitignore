@@ -13,4 +13,3 @@ models/trt_cache/
 *.bin
 
 # Other potential data
-data/
