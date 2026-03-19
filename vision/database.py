@@ -154,8 +154,8 @@ class EnrollmentDatabase:
             logger.debug(f"Recognized: {best_match_name} ({best_match_id}) with score {best_score:.3f}")
             return best_match_id, best_score, best_match_name
         else:
-            logger.debug(f"No match found (best score: {best_score:.3f})")
-            return None, 0.0, None
+            logger.info(f"No match found (best score: {best_score:.3f} below threshold {threshold})")
+            return None, best_score, None
     
     def _cosine_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
         """Calculate cosine similarity between two embeddings."""

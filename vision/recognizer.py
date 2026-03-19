@@ -120,17 +120,17 @@ class FaceRecognizer:
     ) -> np.ndarray:
         """
         Align and crop face from image.
-        
+
         Args:
             image: Input image (BGR format)
             bbox: Bounding box [x1, y1, x2, y2]
             landmarks: Optional 5-point landmarks for better alignment
-        
+
         Returns:
             Aligned face image
         """
         x1, y1, x2, y2 = map(int, bbox)
-        
+
         # Add margin
         margin = 0.2
         width = x2 - x1
@@ -139,13 +139,13 @@ class FaceRecognizer:
         y1 = max(0, int(y1 - height * margin))
         x2 = min(image.shape[1], int(x2 + width * margin))
         y2 = min(image.shape[0], int(y2 + height * margin))
-        
+
         # Crop face
         face = image[y1:y2, x1:x2]
-        
+
         # Resize to input size
         face = cv2.resize(face, self.input_size)
-        
+
         return face
     
     def preprocess(self, face: np.ndarray) -> np.ndarray:

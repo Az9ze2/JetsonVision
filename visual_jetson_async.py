@@ -116,7 +116,7 @@ def _parse_args() -> argparse.Namespace:
                    help="WebSocket URI of the audio/processor Pi (e.g. ws://192.168.1.100:8765)")
     p.add_argument("--det-model", default="models/buffalo_l/det_10g.onnx",
                    help="Path to SCRFD ONNX detection model")
-    p.add_argument("--rec-model", default="models/arcface_r100_v1_fp16.onnx",
+    p.add_argument("--rec-model", default="models/buffalo_l/w600k_r50.onnx",
                    help="Path to ArcFace ONNX recognition model")
     p.add_argument("--db-path", default="data/enrollments.json",
                    help="Path to enrollment JSON database")
@@ -214,6 +214,7 @@ class JetsonVisionPipeline:
         self.fps: float = 0.0
         self._last_time = time.monotonic()
         self._last_resource_log = time.monotonic()
+        self._last_detection_log = time.monotonic()
         self._process = psutil.Process()
         self.skip_frames: int = args.skip_frames
         self.cv_trackers: list = []
@@ -497,10 +498,16 @@ class JetsonVisionPipeline:
                     )
                     setattr(track, "has_embedding", True)
                     result = self.db.recognize(embedding, threshold=0.4)
-                    if result:
-                        s_id, similarity, name = result
-                        self.track_names[tid] = name
-                        logger.info(f"Recognised: {name} (ID={s_id}, sim={similarity:.3f})")
+                    s_id, similarity, name = result
+                    if s_id is not None:
+                        if isinstance(name, dict):
+                            nickname = name.get("nickname_eng", "")
+                            fullname = name.get("fullname_eng", "")
+                            display_name = f"{nickname} ({fullname})" if nickname and fullname else nickname or fullname or "Unknown"
+                        else:
+                            display_name = name or "Unknown"
+                        self.track_names[tid] = display_name
+                        logger.info(f"Recognised: {display_name} (ID={s_id}, sim={similarity:.3f})")
                     else:
                         self.track_names[tid] = "Unknown"
                         logger.info("Recognition: no match above threshold")
@@ -582,6 +589,23 @@ class JetsonVisionPipeline:
                 # --- Pipeline ---
                 frame, tracks = self._process_frame(frame)
 
+                # --- Detection log (throttled to 1/sec) ---
+                now_det = time.monotonic()
+                if now_det - self._last_detection_log >= 1.0:
+                    if tracks:
+                        names_on_screen = []
+                        for t in tracks:
+                            tid = getattr(t, "track_id", -1)
+                            name = self.track_names.get(tid)
+                            if name:
+                                names_on_screen.append(f"{name} (track {tid})")
+                            else:
+                                names_on_screen.append(f"Unidentified (track {tid})")
+                        logger.info(f"DETECTED [{len(tracks)} face(s)]: {' | '.join(names_on_screen)}")
+                    else:
+                        logger.info("DETECTED: no faces")
+                    self._last_detection_log = now_det
+
                 # --- LAN stream ---
                 if self.sender is not None:
                     payload = build_result(
@@ -595,8 +619,16 @@ class JetsonVisionPipeline:
 
                 # --- WebSocket Tracker Stream ---
                 if self.ws_sender is not None and tracks:
-                    # We pick the largest/most confident face as the primary subject
-                    primary_track = max(tracks, key=lambda t: getattr(t, "confidence", 0.0))
+                    # Priority 1: tracks that are looking at the robot
+                    # Priority 2: largest face (closest to camera)
+                    def _bbox_area(t):
+                        b = getattr(t, "bbox", [0, 0, 0, 0])
+                        return (b[2] - b[0]) * (b[3] - b[1])
+
+                    looking_tracks = [t for t in tracks if getattr(t, "head_pose", {}) and
+                                      getattr(t, "head_pose", {}).get("is_looking", False)]
+                    candidates = looking_tracks if looking_tracks else tracks
+                    primary_track = max(candidates, key=_bbox_area)
                     tid = getattr(primary_track, "track_id", -1)
                     
                     person_name = "Unknown"
