@@ -33,11 +33,11 @@ from vision.database import EnrollmentDatabase
 # Only poses within yaw < 25° and pitch < 15° — matching the recognition trigger.
 # UP/DOWN are excluded because recognition never fires when pitch > 15°.
 ANGLES = [
-    ("STRAIGHT",       "Look straight at the camera"),
-    ("SLIGHT LEFT",    "Turn your head slightly to the LEFT  (~15°)"),
-    ("SLIGHT RIGHT",   "Turn your head slightly to the RIGHT (~15°)"),
-    ("LEFT",           "Turn your head more to the LEFT  (~25°)"),
-    ("RIGHT",          "Turn your head more to the RIGHT (~25°)"),
+    ("STRAIGHT",       "Look straight at the camera",          "0°"),
+    ("SLIGHT LEFT",    "Turn your head slightly to the LEFT",   "~15°"),
+    ("LEFT",           "Turn your head more to the LEFT",       "~25°"),
+    ("SLIGHT RIGHT",   "Turn your head slightly to the RIGHT",  "~15°"),
+    ("RIGHT",          "Turn your head more to the RIGHT",      "~25°"),
 ]
 
 # ── Colours ───────────────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ def _text(frame, msg, pos, color=WHITE, scale=0.6, thickness=2):
     cv2.putText(frame, msg, pos, cv2.FONT_HERSHEY_DUPLEX, scale, color, thickness)
 
 
-def _draw_ui(frame, angle_name, instruction, captured, total, feedback, face_ok):
+def _draw_ui(frame, angle_name, instruction, degree, captured, total, feedback, face_ok):
     h, w = frame.shape[:2]
 
     # Top bar
@@ -134,6 +134,11 @@ def _draw_ui(frame, angle_name, instruction, captured, total, feedback, face_ok)
         color = GREEN if face_ok else RED
         cv2.rectangle(frame, (0, 62), (w, 100), (0, 0, 0), -1)
         _text(frame, feedback, (10, 90), color, 0.55, 1)
+
+    # Prominent degree display — centre of screen top area
+    deg_size = cv2.getTextSize(degree, cv2.FONT_HERSHEY_DUPLEX, 2.5, 3)[0]
+    deg_x = (w - deg_size[0]) // 2
+    _text(frame, degree, (deg_x, 130), CYAN, 2.5, 3)
 
     # Captured count dots
     for i in range(total):
@@ -196,7 +201,7 @@ def run_enrollment(info: dict, args):
 
     try:
         while angle_idx < len(ANGLES):
-            angle_name, instruction = ANGLES[angle_idx]
+            angle_name, instruction, degree = ANGLES[angle_idx]
 
             frames = pipeline.wait_for_frames()
             color_frame = frames.get_color_frame()
@@ -225,7 +230,7 @@ def run_enrollment(info: dict, args):
                 feedback = "No face detected – position yourself in view"
                 face_ok  = False
 
-            _draw_ui(display, angle_name, instruction, len(embeddings), len(ANGLES), feedback, face_ok)
+            _draw_ui(display, angle_name, instruction, degree, len(embeddings), len(ANGLES), feedback, face_ok)
             cv2.imshow("Enrollment", display)
 
             key = cv2.waitKey(1) & 0xFF
@@ -237,7 +242,7 @@ def run_enrollment(info: dict, args):
             elif key == ord("r") and embeddings:
                 embeddings.pop()
                 angle_idx -= 1
-                print(f"  Retaking angle: {ANGLES[angle_idx][0]}")
+                print(f"  Retaking angle: {ANGLES[angle_idx][0]} ({ANGLES[angle_idx][2]})")
                 feedback = ""
 
             elif key == ord(" "):

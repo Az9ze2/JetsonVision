@@ -220,6 +220,7 @@ class JetsonVisionPipeline:
         self.cv_trackers: list = []
         self.confirmed_tracks: set = set()
         self.track_names: dict[int, str] = {}
+        self.track_details: dict[int, dict] = {}
 
         # Cache ONNX provider string for display
         try:
@@ -497,21 +498,32 @@ class JetsonVisionPipeline:
                         det.get("landmarks"),
                     )
                     setattr(track, "has_embedding", True)
-                    result = self.db.recognize(embedding, threshold=0.4)
+                    result = self.db.recognize(embedding, threshold=0.45)
                     s_id, similarity, name = result
                     if s_id is not None:
                         if isinstance(name, dict):
-                            nickname = name.get("nickname_eng", "")
-                            fullname = name.get("fullname_eng", "")
-                            display_name = f"{nickname} ({fullname})" if nickname and fullname else nickname or fullname or "Unknown"
+                            nickname_eng = name.get("nickname_eng", "")
+                            fullname_eng = name.get("fullname_eng", "")
+                            nickname_thai = name.get("nickname_thai", "")
+                            fullname_thai = name.get("fullname_thai", "")
+                            display_name = f"{nickname_eng} ({fullname_eng})" if nickname_eng and fullname_eng else nickname_eng or fullname_eng or "Unknown"
+                            eng_name = f"{nickname_eng} ({fullname_eng})" if nickname_eng and fullname_eng else nickname_eng or fullname_eng or "Unknown"
+                            thai_name = f"{nickname_thai} ({fullname_thai})" if nickname_thai and fullname_thai else nickname_thai or fullname_thai or "Unknown"
                         else:
                             display_name = name or "Unknown"
+                            eng_name = display_name
+                            thai_name = display_name
                         self.track_names[tid] = display_name
+                        self.track_details[tid] = {
+                            "eng_name": eng_name,
+                            "thai_name": thai_name,
+                            "student_id": s_id,
+                        }
+                        self.confirmed_tracks.add(tid)
                         logger.info(f"Recognised: {display_name} (ID={s_id}, sim={similarity:.3f})")
                     else:
-                        self.track_names[tid] = "Unknown"
-                        logger.info("Recognition: no match above threshold")
-                    self.confirmed_tracks.add(tid)
+                        # Do not lock the track — allow retry after cooldown
+                        logger.info(f"No match (sim={similarity:.3f}) — will retry after cooldown")
                 except Exception as exc:
                     logger.error(f"Embedding extraction failed: {exc}")
                     setattr(track, "has_embedding", False)
@@ -631,19 +643,26 @@ class JetsonVisionPipeline:
                     primary_track = max(candidates, key=_bbox_area)
                     tid = getattr(primary_track, "track_id", -1)
                     
-                    person_name = "Unknown"
                     is_registered = False
+                    eng_name = "Unknown"
+                    thai_name = "Unknown"
+                    student_id = None
                     if tid in self.confirmed_tracks:
-                        person_name = self.track_names.get(tid, "Unknown")
-                        if person_name != "Unknown":
+                        details = self.track_details.get(tid, {})
+                        eng_name = details.get("eng_name", "Unknown")
+                        thai_name = details.get("thai_name", "Unknown")
+                        student_id = details.get("student_id")
+                        if eng_name != "Unknown":
                             is_registered = True
-                    
+
                     # Construct minimal packet for audio trigger
                     ws_payload = {
                         "timestamp": time.time(),
                         "status": "detected",
                         "metadata": {
-                            "person_id": person_name,
+                            "eng_name": eng_name,
+                            "thai_name": thai_name,
+                            "student_id": student_id,
                             "is_registered": is_registered,
                             "confidence": getattr(primary_track, "confidence", 0.0)
                         }

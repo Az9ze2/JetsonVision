@@ -44,20 +44,20 @@ python visual_jetson_async.py --no-display
 
 ### With WebSocket trigger (sends recognition events to audio Pi)
 ```bash
-python visual_jetson_async.py --no-display --ws-enabled --ws-uri ws://192.168.1.100:8765
+python visual_jetson_async.py --no-display --ws-enabled --ws-uri ws://192.168.1.20:8765
 ```
 
 ### With ZMQ LAN stream (sends frames to downstream device)
 ```bash
-python visual_jetson_async.py --no-display --stream-enabled --stream-host 192.168.1.100 --stream-port 5555
+python visual_jetson_async.py --no-display --stream-enabled --stream-host 192.168.1.20 --stream-port 5555
 ```
 
 ### Full production (WebSocket + ZMQ stream + GPU)
 ```bash
 python visual_jetson_async.py \
   --no-display \
-  --ws-enabled --ws-uri ws://192.168.1.100:8765 \
-  --stream-enabled --stream-host 192.168.1.100 --stream-port 5555
+  --ws-enabled --ws-uri ws://192.168.1.20:8765 \
+  --stream-enabled --stream-host 192.168.1.20 --stream-port 5555
 ```
 
 ---
