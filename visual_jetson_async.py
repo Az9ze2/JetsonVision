@@ -114,11 +114,12 @@ def _parse_args() -> argparse.Namespace:
                    help="Enable async WebSocket streaming for vision triggers")
     p.add_argument("--ws-uri", default="ws://127.0.0.1:8765", metavar="URI",
                    help="WebSocket URI of the audio/processor Pi (e.g. ws://192.168.1.100:8765)")
-    p.add_argument("--det-model", default="models/buffalo_l/det_10g.onnx",
+    base_dir = Path(__file__).resolve().parent
+    p.add_argument("--det-model", default=str(base_dir / "models/buffalo_l/det_10g.onnx"),
                    help="Path to SCRFD ONNX detection model")
-    p.add_argument("--rec-model", default="models/buffalo_l/w600k_r50.onnx",
+    p.add_argument("--rec-model", default=str(base_dir / "models/buffalo_l/w600k_r50.onnx"),
                    help="Path to ArcFace ONNX recognition model")
-    p.add_argument("--db-path", default="data/enrollments.json",
+    p.add_argument("--db-path", default=str(base_dir / "data/enrollments.json"),
                    help="Path to enrollment JSON database")
     p.add_argument("--log-level", default="INFO",
                    choices=["TRACE", "DEBUG", "INFO", "WARNING", "ERROR"],
